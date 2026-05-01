@@ -1,0 +1,28 @@
+{
+  "name": "high-precision-leads-generation",
+  "version": "1.0.0",
+  "description": "B2B lead scraper and personalizer powered by Playwright and Claude AI",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "scrape": "ts-node src/cli.ts",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
+    "playwright": "^1.52.0",
+    "commander": "^12.0.0",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.4.0",
+    "zod": "^3.22.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "nanoid": "^3.3.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.0"
+  }
+}
