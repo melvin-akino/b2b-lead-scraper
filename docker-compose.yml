@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    container_name: lead-scraper
+    ports:
+      - "3000:3000"
+    environment:
+      # You can set your API key here OR via the Settings page in the UI.
+      # If set here, it takes priority and pre-fills the settings on first run.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - NODE_ENV=production
+    volumes:
+      # Persist leads and exports across container restarts
+      - ./data:/app/data
+      - ./output:/app/output
+    restart: unless-stopped
+    # Required for Playwright/Chromium on Linux
+    shm_size: '2gb'
