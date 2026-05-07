@@ -16,16 +16,19 @@ import { runPipeline } from '../../src/pipeline';
 import { getAllLeads, clearAllLeads, upsertLead } from '../../src/store';
 import { exportToCSV } from '../../src/exporter';
 import { LeadInputSchema } from '../../src/schema';
-import { loadSettings } from '../settings';
+import { loadSettings, getActiveProviderConfig } from '../settings';
 
 const router = Router();
 
 // ── POST /scrape — full pipeline with SSE progress stream ────────────────────
 
 router.post('/scrape', async (req: Request, res: Response) => {
-  const { apiKey } = loadSettings();
-  if (!apiKey) {
-    return res.status(400).json({ error: 'API key not configured. Go to Settings first.' });
+  const settings = loadSettings();
+  const providerConfig = getActiveProviderConfig();
+
+  // Ollama doesn't need a key; all others do
+  if (providerConfig.name !== 'ollama' && !providerConfig.apiKey) {
+    return res.status(400).json({ error: `No API key set for ${settings.provider}. Go to Settings first.` });
   }
 
   const rawInputs: unknown[] = Array.isArray(req.body.inputs) ? req.body.inputs : [req.body.input].filter(Boolean);
@@ -53,6 +56,7 @@ router.post('/scrape', async (req: Request, res: Response) => {
   try {
     await runPipeline(inputs, {
       searchContext: context,
+      providerConfig,
       onProgress: (event) => send(event),
     });
   } catch (err) {

@@ -1,22 +1,22 @@
 /**
  * personalizer.ts
  *
- * Uses the Claude API to generate three distinct, personalized email icebreaker
- * hooks for a prospect based on the structured research data.
+ * Generates three distinct email icebreaker hooks for a prospect based on
+ * structured research data, using the active AI provider.
  *
- * Each hook is crafted to feel hand-written, not templated. The three hooks
- * cover different angles: pain-point led, aspiration led, and proof-point led.
+ * Hook angles:
+ *   1. Pain-point led   — empathetic, references a specific struggle
+ *   2. Aspiration led   — energizing, references a visible goal or opportunity
+ *   3. Proof/curiosity  — provocative, uses a stat, question, or observation
  *
- * Prompt caching is applied to the static system prompt to minimize token costs.
+ * The AI provider is resolved from settings at call time.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { createProvider, ProviderConfig } from './ai-provider';
 import { ResearchResult } from './researcher';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `You are a world-class B2B cold email copywriter. Your specialty is writing opening lines (icebreakers) for outbound sales emails that feel personal, specific, and human — never templated or spammy.
 
@@ -41,17 +41,27 @@ Rules:
 /**
  * Generates three personalized email icebreaker hooks for a prospect.
  *
- * @param prospectName   Full name of the prospect (e.g. "Maria Santos").
- * @param role           Their role/title (e.g. "CEO").
- * @param companyName    Company name (e.g. "Acme Corp").
- * @param research       Structured research output from researchLead().
+ * @param prospectName    Full name of the prospect (e.g. "Maria Santos").
+ * @param role            Their role/title (e.g. "CEO").
+ * @param companyName     Company name (e.g. "Acme Corp").
+ * @param research        Structured research output from researchLead().
+ * @param providerConfig  The AI provider config to use (resolved from settings at runtime).
  */
 export async function generateHooks(
   prospectName: string,
   role: string,
   companyName: string,
-  research: ResearchResult
+  research: ResearchResult,
+  providerConfig?: ProviderConfig
 ): Promise<string[]> {
+  const provider = createProvider(
+    providerConfig ?? {
+      name: 'anthropic',
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: 'claude-sonnet-4-6',
+    }
+  );
+
   const userMessage = `Prospect: ${prospectName} (${role} at ${companyName})
 
 Business Focus: ${research.business_focus}
@@ -63,32 +73,16 @@ Summary: ${research.analysis_summary}
 
 Write 3 icebreaker hooks for this prospect. Return only the JSON array.`;
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 512,
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT,
-        // Cache the static system prompt to avoid re-billing on every lead
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  const raw = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => (block as Anthropic.TextBlock).text)
-    .join('');
+  const raw = await provider.complete(SYSTEM_PROMPT, userMessage, 512);
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
   try {
-    const hooks = JSON.parse(raw) as string[];
+    const hooks = JSON.parse(cleaned) as string[];
     if (!Array.isArray(hooks) || hooks.length !== 3) {
       throw new Error('Expected an array of exactly 3 hooks.');
     }
     return hooks;
   } catch {
-    throw new Error(`Failed to parse hooks JSON from model.\nRaw response:\n${raw}`);
+    throw new Error(`Failed to parse hooks JSON.\nRaw response:\n${raw}`);
   }
 }

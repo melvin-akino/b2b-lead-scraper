@@ -26,6 +26,7 @@ import { researchLead } from './researcher';
 import { generateHooks } from './personalizer';
 import { upsertLead } from './store';
 import { Lead, LeadInput } from './schema';
+import { ProviderConfig } from './ai-provider';
 
 const INTER_LEAD_DELAY_MS = { min: 3000, max: 7000 };
 
@@ -59,6 +60,8 @@ export interface PipelineOptions {
   searchContext?: string;
   /** Optional callback for structured real-time progress events (used by the web server). */
   onProgress?: (event: ProgressEvent) => void;
+  /** AI provider to use for research and personalization. Falls back to Anthropic env var. */
+  providerConfig?: ProviderConfig;
 }
 
 export interface PipelineResult {
@@ -131,7 +134,7 @@ export async function runPipeline(
       const researchSpinner = ora('  Analyzing with Claude...').start();
       emit({ type: 'step_start', message: 'Analyzing content with Claude...', ...meta });
       try {
-        const research = await researchLead(lead.raw_scraped_content, options.searchContext);
+        const research = await researchLead(lead.raw_scraped_content, options.searchContext, options.providerConfig);
         lead.business_focus = research.business_focus;
         lead.pain_points = research.pain_points;
         lead.analysis_summary = research.analysis_summary;
@@ -157,7 +160,8 @@ export async function runPipeline(
             business_focus: lead.business_focus!,
             pain_points: lead.pain_points!,
             analysis_summary: lead.analysis_summary!,
-          }
+          },
+          options.providerConfig
         );
         lead.generated_hooks = hooks;
         lead.analyzed_at = new Date().toISOString();

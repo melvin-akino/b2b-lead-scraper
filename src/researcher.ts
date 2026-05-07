@@ -1,20 +1,20 @@
 /**
  * researcher.ts
  *
- * Uses the Claude API to analyze raw scraped content and extract:
- *   - A concise summary of the prospect's current business focus
- *   - An array of inferred pain points (drawn from recent news, posts, or copy)
+ * Analyzes raw scraped content via the active AI provider and returns:
+ *   - business_focus  — 1-2 sentence summary of what the company is working on
+ *   - pain_points[]   — 3 specific, inferred pain points
+ *   - analysis_summary — 3-4 sentence briefing note for the sales rep
  *
- * Prompt caching is enabled on the static system prompt to cut API costs
- * on repeated runs. Only the per-lead user content is billed at full price.
+ * The AI provider is resolved from settings at call time, so switching
+ * providers in the UI takes effect on the next pipeline run without restart.
+ * Prompt caching is applied automatically when the Anthropic provider is active.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { createProvider, ProviderConfig } from './ai-provider';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `You are an expert B2B sales researcher. Your job is to analyze scraped web content about a company or individual prospect and extract structured intelligence that a sales rep can use to open a conversation.
 
@@ -46,17 +46,27 @@ export interface ResearchResult {
 /**
  * Analyzes scraped content for a single prospect and returns structured research.
  *
- * @param rawContent  The full text scraped from the prospect's website / LinkedIn.
- * @param context     Optional context string (e.g. "SaaS founder in Manila") to guide the model.
+ * @param rawContent    The full text scraped from the prospect's website / LinkedIn.
+ * @param context       Optional context string (e.g. "SaaS founder in Manila") to guide the model.
+ * @param providerConfig The AI provider config to use (resolved from settings at runtime).
  */
 export async function researchLead(
   rawContent: string,
-  context?: string
+  context?: string,
+  providerConfig?: ProviderConfig
 ): Promise<ResearchResult> {
+  const provider = createProvider(
+    providerConfig ?? {
+      name: 'anthropic',
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: 'claude-sonnet-4-6',
+    }
+  );
+
   const userMessage = [
     context ? `Context about this prospect: ${context}\n` : '',
     '--- SCRAPED CONTENT START ---',
-    rawContent.slice(0, 12_000), // cap to avoid exceeding context limits
+    rawContent.slice(0, 12_000),
     '--- SCRAPED CONTENT END ---',
     '',
     'Analyze the content above and return the JSON object as instructed.',
@@ -64,30 +74,14 @@ export async function researchLead(
     .filter(Boolean)
     .join('\n');
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT,
-        // Cache the static system prompt — saves ~80% on repeated lead runs
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages: [{ role: 'user', content: userMessage }],
-  });
+  const raw = await provider.complete(SYSTEM_PROMPT, userMessage, 1024);
 
-  const raw = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => (block as Anthropic.TextBlock).text)
-    .join('');
+  // Strip markdown code fences if the model wraps the JSON (some providers do this)
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
   try {
-    const parsed = JSON.parse(raw) as ResearchResult;
-    return parsed;
+    return JSON.parse(cleaned) as ResearchResult;
   } catch {
-    // Surface the raw response in the error so the caller can debug
-    throw new Error(`Failed to parse research JSON from model.\nRaw response:\n${raw}`);
+    throw new Error(`Failed to parse research JSON.\nRaw response:\n${raw}`);
   }
 }

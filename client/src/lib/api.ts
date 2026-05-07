@@ -38,10 +38,28 @@ export interface ProgressEvent {
   data?: unknown;
 }
 
+export type ProviderName = 'anthropic' | 'groq' | 'gemini' | 'ollama' | 'openrouter';
+
+export interface ProviderMeta {
+  value: ProviderName;
+  label: string;
+  free: boolean;
+  requiresKey: boolean;
+}
+
+export interface ModelOption {
+  value: string;
+  label: string;
+}
+
 export interface Settings {
-  apiKey: string;
-  apiKeySet: boolean;
+  provider: ProviderName;
+  providerKeys: Partial<Record<ProviderName, string>>;
+  providerModels: Partial<Record<ProviderName, string>>;
+  ollamaUrl: string;
   headless: boolean;
+  providers: ProviderMeta[];
+  defaultModels: Record<ProviderName, string>;
 }
 
 const BASE = '/api';
@@ -114,13 +132,25 @@ export async function fetchSettings(): Promise<Settings> {
   return res.json();
 }
 
-export async function saveSettings(data: { apiKey?: string; headless?: boolean }): Promise<void> {
+export async function saveSettings(data: {
+  provider?: ProviderName;
+  providerKey?: string;
+  model?: string;
+  ollamaUrl?: string;
+  headless?: boolean;
+}): Promise<void> {
   const res = await fetch(`${BASE}/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(await res.text());
+}
+
+export async function fetchProviderModels(): Promise<Record<ProviderName, ModelOption[]>> {
+  const res = await fetch(`${BASE}/settings/models`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
 
 export async function testApiKey(): Promise<{ success: boolean; message?: string; error?: string }> {

@@ -4,3 +4,4 @@ dist/
 output/
 *.csv
 data/leads.json
+data/settings.json
