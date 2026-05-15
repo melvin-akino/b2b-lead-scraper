@@ -34,11 +34,14 @@ router.post('/scrape', async (req: Request, res: Response) => {
   const rawInputs: unknown[] = Array.isArray(req.body.inputs) ? req.body.inputs : [req.body.input].filter(Boolean);
   const context: string | undefined = req.body.context;
 
-  const inputs = rawInputs.map((item, i) => {
-    const parsed = LeadInputSchema.safeParse(item);
-    if (!parsed.success) throw new Error(`Invalid lead at index ${i}: ${JSON.stringify(parsed.error.format())}`);
-    return parsed.data;
-  });
+  const inputs: ReturnType<typeof LeadInputSchema.parse>[] = [];
+  for (let i = 0; i < rawInputs.length; i++) {
+    const parsed = LeadInputSchema.safeParse(rawInputs[i]);
+    if (!parsed.success) {
+      return res.status(400).json({ error: `Invalid lead at index ${i}: ${JSON.stringify(parsed.error.format())}` });
+    }
+    inputs.push(parsed.data);
+  }
 
   // Switch to SSE mode
   res.writeHead(200, {

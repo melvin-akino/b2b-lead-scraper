@@ -1,12 +1,30 @@
 import { z } from 'zod';
 
+// Normalise a URL string: prepend https:// if no protocol is present
+const normaliseUrl = (val: string) => {
+  const trimmed = val.trim();
+  if (!trimmed) return trimmed;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+const urlField = z
+  .string()
+  .transform(normaliseUrl)
+  .pipe(z.string().url());
+
+const optionalUrlField = z
+  .string()
+  .transform(normaliseUrl)
+  .pipe(z.string().url())
+  .optional();
+
 export const LeadSchema = z.object({
   id: z.string(),
   company_name: z.string(),
   prospect_name: z.string(),
   role: z.string(),
-  website_url: z.string().url(),
-  linkedin_url: z.string().url().optional(),
+  website_url: urlField,
+  linkedin_url: optionalUrlField,
   raw_scraped_content: z.string().optional(),
   analysis_summary: z.string().optional(),
   pain_points: z.array(z.string()).optional(),

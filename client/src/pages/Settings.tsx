@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Eye, EyeOff, CheckCircle, XCircle, Loader, ExternalLink, Zap } from 'lucide-react';
 import {
   fetchSettings, saveSettings, testApiKey, fetchProviderModels,
-  Settings, ProviderName, ModelOption,
+  type Settings, type ProviderName, type ModelOption,
 } from '../lib/api';
 import clsx from 'clsx';
 
